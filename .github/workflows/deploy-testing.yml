@@ -1,0 +1,53 @@
+name: Deploy to Testing
+
+on:
+  push:
+    branches: 
+      - testing
+
+run-name: 🧪 Deploy to TESTING by @${{ github.actor }} (${{ github.sha }})
+
+jobs:
+  deploy-testing:
+    runs-on: ubuntu-latest
+    environment: testing
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Create environment file
+        run: |
+          echo "${{ secrets.ENV_TESTING }}" > .env.production
+          echo "NEXT_PUBLIC_APP_VERSION=${{ github.sha }}" >> .env.production
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/todo-app:testing
+      
+      - name: Deploy to Testing Server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USERNAME }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            docker pull ${{ secrets.DOCKER_USERNAME }}/todo-app:testing
+            docker stop todo-app-testing || true
+            docker rm todo-app-testing || true
+            docker run -d \
+              --name todo-app-testing \
+              -p 3002:3000 \
+              --restart unless-stopped \
+              ${{ secrets.DOCKER_USERNAME }}/todo-app:testing
+            echo "✅ Testing environment deployed successfully on port 3002"
+
