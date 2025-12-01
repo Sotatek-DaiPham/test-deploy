@@ -35,4 +35,4 @@ jobs:
             docker pull ${{ secrets.DOCKER_USERNAME }}/todo-app:latest
             docker stop todo-app || true
             docker rm todo-app || true
-            docker run -d --name todo-app -p 80:3000 --restart unless-stopped ${{ secrets.DOCKER_USERNAME }}/todo-app:latest
+            docker run -d --name todo-app -p 3000:3000 --restart unless-stopped ${{ secrets.DOCKER_USERNAME }}/todo-app:latest
