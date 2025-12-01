@@ -24,7 +24,7 @@ jobs:
           -d '{
             "text": "🚀 *TESTING Deployment Started*\n📦 App: Todo App\n👤 By: ${{ github.actor }}\n🌿 Branch: ${{ github.ref_name }}\n💬 Commit: `${{ github.event.head_commit.message }}`\n⏱️ Started at: '"$(date -u +"%Y-%m-%d %H:%M:%S UTC")"'",
             "thread": {
-              "threadKey": "testing-deployments"
+              "threadKey": "testing-deploy-${{ github.run_id }}"
             }
           }'
       
@@ -71,7 +71,7 @@ jobs:
           -d '{
             "text": "✅ *TESTING Deployment Successful!*\n📦 App: Todo App\n👤 By: ${{ github.actor }}\n🌐 URL: http://${{ secrets.DO_HOST }}:3002\n🔗 Commit: `${{ github.event.head_commit.message }}`\n⏱️ Completed at: '"$(date -u +"%Y-%m-%d %H:%M:%S UTC")"'\n\n🧪 *Ready for QA testing!*",
             "thread": {
-              "threadKey": "testing-deployments"
+              "threadKey": "testing-deploy-${{ github.run_id }}"
             }
           }'
       
@@ -83,7 +83,7 @@ jobs:
           -d '{
             "text": "❌ *TESTING Deployment Failed!*\n📦 App: Todo App\n👤 By: ${{ github.actor }}\n🌿 Branch: ${{ github.ref_name }}\n🔗 Check logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\n⏱️ Failed at: '"$(date -u +"%Y-%m-%d %H:%M:%S UTC")"'",
             "thread": {
-              "threadKey": "testing-deployments"
+              "threadKey": "testing-deploy-${{ github.run_id }}"
             }
           }'
 
