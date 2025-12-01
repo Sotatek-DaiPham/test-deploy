@@ -1,22 +1,20 @@
-# Complete Guide: Deploy Next.js App with Docker + GitHub Actions
+# Next.js Docker Deployment Guide
 
-This guide shows you how to deploy any Next.js (or React) frontend project to an Ubuntu server using Docker and GitHub Actions for CI/CD.
+Complete guide to deploy Next.js apps using Docker + GitHub Actions to Ubuntu server.
 
 ## 📋 Prerequisites
 
-- [ ] Next.js/React project with `package.json`
-- [ ] GitHub account and repository
-- [ ] Docker Hub account (free at https://hub.docker.com)
-- [ ] Ubuntu server (Digital Ocean, AWS, Linode, etc.)
-- [ ] SSH access to your server
+- Next.js project with `package.json`
+- GitHub account and repository
+- Docker Hub account (free at https://hub.docker.com)
+- Ubuntu server (Digital Ocean, AWS, etc.)
+- SSH access to your server
 
 ---
 
-## Part 1: Dockerize Your Application
+## Part 1: Dockerize Your App
 
-### Step 1: Create `Dockerfile`
-
-Create a file named `Dockerfile` in your project root:
+### 1. Create `Dockerfile`
 
 ```dockerfile
 FROM node:20-alpine AS base
@@ -32,57 +30,41 @@ RUN pnpm install --frozen-lockfile
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json pnpm-lock.yaml ./
 COPY . .
 RUN pnpm run build
 
 # Run
 FROM base AS runner
 WORKDIR /app
-
 ENV NODE_ENV=production
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Copy built files
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
 USER nextjs
-
 EXPOSE 3000
 ENV PORT=3000
 
 CMD ["node", "server.js"]
 ```
 
-**Notes:**
-- If using `npm` instead of `pnpm`, replace `pnpm` with `npm` and use `package-lock.json`
-- For yarn, replace with `yarn` and `yarn.lock`
+> **Note:** Replace `pnpm` with `npm` or `yarn` if needed.
 
----
-
-### Step 2: Create `.dockerignore`
-
-Create `.dockerignore` in project root:
+### 2. Create `.dockerignore`
 
 ```
 node_modules
 .next
 .git
 *.log
-npm-debug.log*
 .DS_Store
 .env*.local
-dist
 ```
 
----
-
-### Step 3: Update `next.config.js`
-
-Add `output: 'standalone'` to enable Docker optimization:
+### 3. Update `next.config.js`
 
 ```javascript
 /** @type {import('next').NextConfig} */
@@ -93,53 +75,148 @@ const nextConfig = {
 module.exports = nextConfig
 ```
 
----
-
-### Step 4: Test Docker Build Locally
+### 4. Test Locally
 
 ```bash
-# Make sure Docker Desktop is running
 docker build -t my-app .
-
-# Test it
 docker run -p 3000:3000 my-app
-
-# Open http://localhost:3000 to verify
+# Open http://localhost:3000
 ```
 
 ---
 
-## Part 2: Set Up Docker Hub
+## Part 2: Setup Docker Hub
 
-### Step 1: Create Access Token
-
-1. Go to https://hub.docker.com
-2. Sign in
-3. Click your username → **Account Settings**
-4. Go to **Security** → **Access Tokens**
-5. Click **New Access Token**
+1. Go to https://hub.docker.com → **Account Settings** → **Security**
+2. Click **New Access Token**
    - Description: `github-actions`
    - Permissions: **Read, Write, Delete**
-6. **Copy the token** (you won't see it again!)
+3. **Copy the token** (save it securely)
 
 ---
 
-## Part 3: Create GitHub Actions Workflow
+## Part 3: Configure Server
 
-### Step 1: Create Workflow File
+### 1. SSH into Server
+
+```bash
+ssh root@YOUR_SERVER_IP
+```
+
+### 2. Install Docker
+
+```bash
+apt update
+apt install -y docker.io
+systemctl start docker
+systemctl enable docker
+docker --version
+```
+
+### 3. Create SSH Key (on your local machine)
+
+```bash
+# Generate key
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/deploy_key -N ""
+
+# Copy to server
+ssh-copy-id -i ~/.ssh/deploy_key.pub root@YOUR_SERVER_IP
+
+# Get private key (for GitHub Secret)
+cat ~/.ssh/deploy_key
+# Copy entire output including BEGIN/END lines
+```
+
+---
+
+## Part 4: Setup GitHub Secrets
+
+Go to: **GitHub Repo → Settings → Secrets and variables → Actions → Secrets tab**
+
+Create these **Repository Secrets** (shared across all environments):
+
+| Secret Name | Value |
+|------------|-------|
+| `DOCKER_USERNAME` | Your Docker Hub username |
+| `DOCKER_PASSWORD` | Docker Hub access token |
+| `DO_HOST` | Server IP address |
+| `DO_USERNAME` | SSH username (usually `root`) |
+| `DO_SSH_KEY` | SSH private key (entire output) |
+
+---
+
+## Part 5: Environment Variables (Optional)
+
+For apps with many environment variables (APIs, contract addresses, etc.):
+
+### 1. Create Environment Files
+
+Create `.env.production.example`:
+
+```bash
+# App Configuration
+NEXT_PUBLIC_APP_NAME=My App
+NEXT_PUBLIC_API_URL=https://api.example.com
+NEXT_PUBLIC_FEATURE_FLAG=true
+
+# Add more NEXT_PUBLIC_* variables as needed
+```
+
+### 2. Setup GitHub Environment Secret
+
+Go to: **Settings → Environments → New environment**
+
+1. Create environment: `production`
+2. Click **Add secret**
+   - Name: `ENV_FILE`
+   - Value: Paste entire content of `.env.production.example`
+
+> **Tip:** Environment secrets are environment-specific. Use `ENV_FILE` as the secret name for all environments (dev/testing/production), and each will have different values.
+
+### 3. Update Workflow
+
+Add `environment: production` and use the secret:
+
+```yaml
+jobs:
+  deploy:
+    environment: production    # ← Links to environment
+    steps:
+      - name: Create environment file
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env.production
+          echo "NEXT_PUBLIC_APP_VERSION=${{ github.sha }}" >> .env.production
+```
+
+### 4. Update `.gitignore`
+
+```
+.env.production
+.env.dev
+.env.testing
+```
+
+> Next.js automatically loads `.env.production` during build.
+
+---
+
+## Part 6: Create GitHub Workflow
 
 Create `.github/workflows/deploy.yml`:
 
 ```yaml
-name: Deploy App
+name: Deploy to Production
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+
+run-name: 🚀 Deploy by @${{ github.actor }} (${{ github.sha }})
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
+    environment: production
     
     steps:
       - name: Checkout code
@@ -151,6 +228,12 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       
+      # Optional: Only if using environment variables
+      - name: Create environment file
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env.production
+          echo "NEXT_PUBLIC_APP_VERSION=${{ github.sha }}" >> .env.production
+      
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -161,171 +244,174 @@ jobs:
       - name: Deploy to Server
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USERNAME }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USERNAME }}
+          key: ${{ secrets.DO_SSH_KEY }}
           script: |
             docker pull ${{ secrets.DOCKER_USERNAME }}/my-app:latest
             docker stop my-app || true
             docker rm my-app || true
-            docker run -d --name my-app -p 3000:3000 --restart unless-stopped ${{ secrets.DOCKER_USERNAME }}/my-app:latest
+            docker run -d \
+              --name my-app \
+              -p 3000:3000 \
+              --restart unless-stopped \
+              ${{ secrets.DOCKER_USERNAME }}/my-app:latest
 ```
 
 **Customize:**
-- Change `my-app` to your app name
-- Change port `3000` if needed
-- Change branch from `main` to `master` if needed
+- Replace `my-app` with your app name
+- Change port if needed
+- Remove "Create environment file" step if not using env variables
 
 ---
 
-## Part 4: Configure GitHub Secrets
-
-### Step 1: Add Secrets to GitHub
-
-1. Go to your GitHub repository
-2. Click **Settings** → **Secrets and variables** → **Actions**
-3. Click **New repository secret**
-
-Add these secrets:
-
-| Secret Name | Value | Example |
-|-------------|-------|---------|
-| `DOCKER_USERNAME` | Your Docker Hub username | `john123` |
-| `DOCKER_PASSWORD` | Docker Hub access token | `dckr_pat_abc123...` |
-| `SERVER_HOST` | Your server IP address | `152.42.235.140` |
-| `SERVER_USERNAME` | SSH username (usually `root`) | `root` |
-| `SERVER_SSH_KEY` | SSH private key (see below) | |
-
----
-
-## Part 5: Set Up Your Ubuntu Server
-
-### Step 1: SSH into Your Server
-
-```bash
-ssh root@YOUR_SERVER_IP
-```
-
-Enter your password when prompted.
-
----
-
-### Step 2: Install Docker
-
-```bash
-# Update packages
-apt update
-
-# Install Docker
-apt install -y docker.io
-
-# Start Docker
-systemctl start docker
-systemctl enable docker
-
-# Verify
-docker --version
-```
-
----
-
-### Step 3: Create SSH Key for GitHub Actions
-
-**On your local machine** (not the server):
-
-```bash
-# Generate SSH key
-ssh-keygen -t rsa -b 4096 -f ~/.ssh/deploy_key -N ""
-
-# Copy public key to server
-ssh-copy-id -i ~/.ssh/deploy_key.pub root@YOUR_SERVER_IP
-
-# Test it works
-ssh -i ~/.ssh/deploy_key root@YOUR_SERVER_IP
-# Should log in without password
-```
-
----
-
-### Step 4: Get Private Key for GitHub Secret
-
-```bash
-# Display private key
-cat ~/.ssh/deploy_key
-```
-
-**Copy the ENTIRE output** including:
-```
------BEGIN OPENSSH PRIVATE KEY-----
-...all the lines...
------END OPENSSH PRIVATE KEY-----
-```
-
-Paste this as the value for `SERVER_SSH_KEY` secret in GitHub.
-
----
-
-## Part 6: Deploy!
-
-### Step 1: Push to GitHub
+## Part 7: Deploy! 🚀
 
 ```bash
 git add .
-git commit -m "Add Docker and GitHub Actions deployment"
+git commit -m "Setup Docker deployment"
 git push
 ```
 
----
-
-### Step 2: Watch Deployment
-
-1. Go to your GitHub repository
-2. Click **Actions** tab
-3. Watch the workflow run (takes 3-5 minutes)
-4. Wait for green checkmark ✅
+**Watch deployment:**
+1. Go to GitHub → **Actions** tab
+2. Wait for green checkmark ✅
+3. Access your app: `http://YOUR_SERVER_IP:3000`
 
 ---
 
-### Step 3: Access Your App
+## Part 8: Multi-Environment Setup (Optional)
 
-Open browser:
+For dev/testing/production environments on the same server:
+
+### 1. Create GitHub Environments
+
+Go to: **Settings → Environments**
+
+Create three environments:
+- `dev`
+- `testing`  
+- `production`
+
+For each environment, add **Environment Secret**:
+- Name: `ENV_FILE`
+- Value: Paste content from `.env.dev.example`, `.env.testing.example`, or `.env.production.example`
+
+### 2. Create Separate Workflows
+
+**`.github/workflows/deploy-dev.yml`:**
+```yaml
+name: Deploy to Development
+
+on:
+  push:
+    branches: [dev]
+
+run-name: 🚀 Deploy to DEV by @${{ github.actor }}
+
+jobs:
+  deploy-dev:
+    runs-on: ubuntu-latest
+    environment: dev    # ← Uses "dev" environment secrets
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Create environment file
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env.production
+          echo "NEXT_PUBLIC_APP_VERSION=${{ github.sha }}" >> .env.production
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/my-app:dev
+      
+      - name: Deploy to Development Server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USERNAME }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            docker pull ${{ secrets.DOCKER_USERNAME }}/my-app:dev
+            docker stop my-app-dev || true
+            docker rm my-app-dev || true
+            docker run -d \
+              --name my-app-dev \
+              -p 3001:3000 \
+              --restart unless-stopped \
+              ${{ vars.DOCKER_USERNAME }}/my-app:dev
 ```
-http://YOUR_SERVER_IP:3000
+
+**`.github/workflows/deploy-testing.yml`:**
+```yaml
+name: Deploy to Testing
+
+on:
+  push:
+    branches: [testing]
+
+run-name: 🧪 Deploy to TESTING by @${{ github.actor }}
+
+jobs:
+  deploy-testing:
+    runs-on: ubuntu-latest
+    environment: testing    # ← Uses "testing" environment secrets
+    
+    steps:
+      # Same steps as deploy-dev.yml, but:
+      # - Tags: my-app:testing
+      # - Port: 3002
+      # - Container name: my-app-testing
 ```
 
-🎉 **Your app is live!**
+> **Note:** Both workflows use `${{ secrets.ENV_FILE }}` but get different values based on the `environment` context!
+
+### 3. Access URLs
+
+```
+Dev:     http://YOUR_SERVER_IP:3001
+Testing: http://YOUR_SERVER_IP:3002
+Prod:    http://YOUR_SERVER_IP:3000
+```
+
+### 4. Benefits of This Approach
+
+✅ Same workflow code for all environments  
+✅ Environment-specific secrets automatically selected  
+✅ Can add protection rules (require approvals for production)  
+✅ Clear separation between environments
 
 ---
 
-## Part 7: Set Up Custom Domain + HTTPS (Optional)
+## Part 9: HTTPS with Custom Domain (Optional)
 
-### Prerequisites
+### 1. Point Domain to Server
 
-- Domain name (buy from Namecheap, Cloudflare, or use free DuckDNS)
-- Point domain's A record to your server IP
+Add A record: `@` → `YOUR_SERVER_IP`
 
----
-
-### Step 1: Install Nginx
+### 2. Install Nginx + Certbot
 
 ```bash
 apt update
 apt install -y nginx certbot python3-certbot-nginx
-systemctl start nginx
-systemctl enable nginx
 ```
 
----
-
-### Step 2: Configure Nginx
-
-Create config file:
+### 3. Configure Nginx
 
 ```bash
 nano /etc/nginx/sites-available/my-app
 ```
-
-Paste (replace `yourdomain.com`):
 
 ```nginx
 server {
@@ -339,14 +425,9 @@ server {
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
-
-Enable it:
 
 ```bash
 ln -s /etc/nginx/sites-available/my-app /etc/nginx/sites-enabled/
@@ -354,121 +435,78 @@ nginx -t
 systemctl reload nginx
 ```
 
----
-
-### Step 3: Get SSL Certificate
+### 4. Get SSL Certificate
 
 ```bash
 certbot --nginx -d yourdomain.com
 ```
 
-Follow prompts:
-- Enter email
-- Agree to terms
-- Certbot will automatically configure HTTPS
-
----
-
-### Step 4: Open Firewall Ports
+### 5. Open Firewall
 
 ```bash
 ufw allow 80/tcp
 ufw allow 443/tcp
 ```
 
-**Or** configure in your cloud provider's firewall dashboard.
+Access: `https://yourdomain.com` 🔒
 
 ---
 
-### Step 5: Access via HTTPS
-
-```
-https://yourdomain.com
-```
-
-🔒 **Secure site with SSL!**
-
----
-
-## 🔄 How to Update Your App
-
-Every time you want to deploy changes:
+## 🔧 Useful Commands
 
 ```bash
-git add .
-git commit -m "Your changes"
-git push
+# View running containers
+docker ps
+
+# View logs
+docker logs my-app
+docker logs -f my-app  # Follow logs
+
+# Restart container
+docker restart my-app
+
+# Check resource usage
+docker stats
+
+# SSH into container
+docker exec -it my-app sh
+
+# Remove all stopped containers
+docker container prune
 ```
 
-GitHub Actions will automatically:
-1. Build new Docker image
-2. Push to Docker Hub
-3. Deploy to your server
-
-**Wait 3-5 minutes** → Changes are live! 🚀
-
 ---
 
-## 📝 Common Issues & Solutions
+## 🐛 Troubleshooting
 
-### Issue: Docker build fails
+**Build fails:**
+- Check `.dockerignore` includes `node_modules`
+- Verify `output: 'standalone'` in `next.config.js`
 
-**Solution:** Check `.dockerignore` includes `node_modules` and `.next`
+**SSH authentication fails:**
+- Verify `DO_SSH_KEY` includes BEGIN/END lines
+- Test locally: `ssh -i ~/.ssh/deploy_key root@SERVER_IP`
 
----
-
-### Issue: GitHub Actions can't SSH
-
-**Solution:** 
-- Verify `SERVER_SSH_KEY` secret includes BEGIN/END lines
-- Test SSH key locally: `ssh -i ~/.ssh/deploy_key root@SERVER_IP`
-
----
-
-### Issue: Port already in use
-
-**Solution:**
+**Port already in use:**
 ```bash
-# Find what's using the port
-lsof -i :3000
-
-# Stop the container
 docker stop my-app
-
-# Or use different port in workflow
-docker run -p 3001:3000 ...
+# Or use different port: -p 3001:3000
 ```
 
----
-
-### Issue: SSL certificate fails
-
-**Solution:**
-- Verify domain DNS points to correct IP: `ping yourdomain.com`
-- Make sure ports 80 and 443 are open in firewall
-- Wait 10-15 minutes for DNS propagation after updating
-
----
-
-## 🎯 Next Steps
-
-- [ ] Set up environment variables (use GitHub secrets and pass to docker run)
-- [ ] Add database (PostgreSQL, MongoDB)
-- [ ] Set up monitoring (PM2, Datadog)
-- [ ] Add staging environment
-- [ ] Set up automatic backups
+**Container exits immediately:**
+```bash
+docker logs my-app  # Check error logs
+```
 
 ---
 
 ## 📚 Resources
 
-- [Docker Documentation](https://docs.docker.com/)
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [Docker Docs](https://docs.docker.com/)
+- [GitHub Actions Docs](https://docs.github.com/en/actions)
 - [Next.js Deployment](https://nextjs.org/docs/deployment)
 - [Let's Encrypt](https://letsencrypt.org/)
-- [Nginx Documentation](https://nginx.org/en/docs/)
 
 ---
 
-**Made with ❤️ - Good luck with your deployment!**
-
+**Happy Deploying! 🚀**

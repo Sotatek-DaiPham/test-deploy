@@ -24,7 +24,7 @@ jobs:
       
       - name: Create environment file
         run: |
-          echo "${{ secrets.ENV_DEV }}" > .env.production
+          echo "${{ secrets.ENV_FILE }}" > .env.production
           echo "NEXT_PUBLIC_APP_VERSION=${{ github.sha }}" >> .env.production
       
       - name: Build and push Docker image
