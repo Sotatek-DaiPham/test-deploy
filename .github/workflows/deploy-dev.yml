@@ -22,7 +22,10 @@ jobs:
           curl -X POST '${{ secrets.GOOGLE_CHAT_WEBHOOK }}' \
           -H 'Content-Type: application/json' \
           -d '{
-            "text": "🚀 *DEV Deployment Started*\n📦 App: Todo App\n👤 By: ${{ github.actor }}\n🌿 Branch: ${{ github.ref_name }}\n💬 Commit: `${{ github.event.head_commit.message }}`\n⏱️ Started at: '"$(date -u +"%Y-%m-%d %H:%M:%S UTC")"'"
+            "text": "🚀 *DEV Deployment Started*\n📦 App: Todo App\n👤 By: ${{ github.actor }}\n🌿 Branch: ${{ github.ref_name }}\n💬 Commit: `${{ github.event.head_commit.message }}`\n⏱️ Started at: '"$(date -u +"%Y-%m-%d %H:%M:%S UTC")"'",
+            "thread": {
+              "threadKey": "dev-deployments"
+            }
           }'
       
       - name: Login to Docker Hub
@@ -66,7 +69,10 @@ jobs:
           curl -X POST '${{ secrets.GOOGLE_CHAT_WEBHOOK }}' \
           -H 'Content-Type: application/json' \
           -d '{
-            "text": "✅ *DEV Deployment Successful!*\n📦 App: Todo App\n👤 By: ${{ github.actor }}\n🌐 URL: http://${{ secrets.DO_HOST }}:3001\n🔗 Commit: `${{ github.event.head_commit.message }}`\n⏱️ Completed at: '"$(date -u +"%Y-%m-%d %H:%M:%S UTC")"'\n\n🧪 *Ready for testing!*"
+            "text": "✅ *DEV Deployment Successful!*\n📦 App: Todo App\n👤 By: ${{ github.actor }}\n🌐 URL: http://${{ secrets.DO_HOST }}:3001\n🔗 Commit: `${{ github.event.head_commit.message }}`\n⏱️ Completed at: '"$(date -u +"%Y-%m-%d %H:%M:%S UTC")"'\n\n🧪 *Ready for testing!*",
+            "thread": {
+              "threadKey": "dev-deployments"
+            }
           }'
       
       - name: ❌ Notify deployment failure
@@ -75,6 +81,9 @@ jobs:
           curl -X POST '${{ secrets.GOOGLE_CHAT_WEBHOOK }}' \
           -H 'Content-Type: application/json' \
           -d '{
-            "text": "❌ *DEV Deployment Failed!*\n📦 App: Todo App\n👤 By: ${{ github.actor }}\n🌿 Branch: ${{ github.ref_name }}\n🔗 Check logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\n⏱️ Failed at: '"$(date -u +"%Y-%m-%d %H:%M:%S UTC")"'"
+            "text": "❌ *DEV Deployment Failed!*\n📦 App: Todo App\n👤 By: ${{ github.actor }}\n🌿 Branch: ${{ github.ref_name }}\n🔗 Check logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\n⏱️ Failed at: '"$(date -u +"%Y-%m-%d %H:%M:%S UTC")"'",
+            "thread": {
+              "threadKey": "dev-deployments"
+            }
           }'
 
