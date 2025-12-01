@@ -16,6 +16,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+      - name: 🔔 Notify deployment start
+        if: always()
+        run: |
+          curl -X POST '${{ secrets.GOOGLE_CHAT_WEBHOOK }}' \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "text": "🚀 *TESTING Deployment Started*\n📦 App: Todo App\n👤 By: ${{ github.actor }}\n🌿 Branch: ${{ github.ref_name }}\n💬 Commit: `${{ github.event.head_commit.message }}`\n⏱️ Started at: '"$(date -u +"%Y-%m-%d %H:%M:%S UTC")"'"
+          }'
+      
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -50,4 +59,22 @@ jobs:
               --restart unless-stopped \
               ${{ secrets.DOCKER_USERNAME }}/todo-app:testing
             echo "✅ Testing environment deployed successfully on port 3002"
+      
+      - name: ✅ Notify deployment success
+        if: success()
+        run: |
+          curl -X POST '${{ secrets.GOOGLE_CHAT_WEBHOOK }}' \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "text": "✅ *TESTING Deployment Successful!*\n📦 App: Todo App\n👤 By: ${{ github.actor }}\n🌐 URL: http://${{ secrets.DO_HOST }}:3002\n🔗 Commit: `${{ github.event.head_commit.message }}`\n⏱️ Completed at: '"$(date -u +"%Y-%m-%d %H:%M:%S UTC")"'\n\n🧪 *Ready for QA testing!*"
+          }'
+      
+      - name: ❌ Notify deployment failure
+        if: failure()
+        run: |
+          curl -X POST '${{ secrets.GOOGLE_CHAT_WEBHOOK }}' \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "text": "❌ *TESTING Deployment Failed!*\n📦 App: Todo App\n👤 By: ${{ github.actor }}\n🌿 Branch: ${{ github.ref_name }}\n🔗 Check logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\n⏱️ Failed at: '"$(date -u +"%Y-%m-%d %H:%M:%S UTC")"'"
+          }'
 
