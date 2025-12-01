@@ -1,4 +1,5 @@
 import { TodoList } from "@/components/todo-list"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { dAppConfig, contracts, network, validateConfig } from "@/config/contracts"
 
 export default function Home() {
@@ -9,8 +10,11 @@ export default function Home() {
   const configValidation = validateConfig();
   
   return (
-    <main className="min-h-screen bg-gradient-to-br from-background to-muted/20 p-4 md:p-8">
+    <main className="min-h-screen bg-linear-to-br from-background to-muted/20 p-4 md:p-8">
       <div className="container mx-auto py-8">
+        <div className="flex justify-end mb-4">
+          <ThemeToggle />
+        </div>
         <div className="mb-8 text-center">
           <h1 className="text-4xl font-bold tracking-tight mb-2">
             {appName}
