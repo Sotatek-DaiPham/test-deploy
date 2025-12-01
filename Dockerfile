@@ -12,6 +12,10 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Environment variables are loaded from .env.production file
+# This file should be created before building the Docker image
+
 RUN pnpm run build
 
 # Run
